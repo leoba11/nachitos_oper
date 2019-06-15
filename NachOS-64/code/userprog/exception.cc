@@ -163,7 +163,7 @@ void Nachos_Fork_Thread( void * p ){
   ASSERT(false);
 }
 
-/*------------------------------------------ EMPIEZAN SYSCALLS ----------------------------------------------------*/
+/*------------------------------------------ EMPIEZAN SYSCALLS ------------------------------------------------*/
 
 // System call # 0
 void Nachos_Halt() { 
@@ -201,10 +201,8 @@ void Nachos_Exit()
 	nextThread = scheduler->FindNextToRun();
 	
 	if(nextThread != NULL){
-		// printf("Cambiando al proximo hilo %s.\n",nextThread->getName());
 		scheduler->Run(nextThread);
 	}else{
-		// printf("Terminando hilo: %s.\n",currentThread->getName());
 		currentThread->Finish();
 	}
 	interrupt->SetLevel(oldLevel);
@@ -218,7 +216,7 @@ void Nachos_Exec()
 {
    DEBUG('n', "Start Exec.\n");
     // Crea un hilo y una estructura para guardar en el mapa
-	Thread *hilito = new Thread("new thread");
+	Thread *hilito = new Thread("new threadsito");
 	threadStruct* data = new threadStruct;
 	data->threadNum = 0;
 	data->structSem = new Semaphore("Thread Semaphore", 0);	
@@ -495,24 +493,15 @@ void Nachos_Fork()
 {
     DEBUG( 'u', "Entering Fork System call\n" );
   // We need to create a new kernel thread to execute the user thread
-  Thread * threadsito = new Thread( "child to execute Fork code" );
+  Thread * threadsito = new Thread( "execute Fork" );
 
   // We need to share the Open File Table structure with this new child
 
   threadsito->open_files = currentThread->open_files;               //Se asigna la tabla de archivos abiertos al nuevo hijo
   threadsito->open_files->addThread();                              //Se añade el nuevo hilo
 
-  // Child and father will also share the same address space, except for the stack
-  // Text, init data and uninit data are shared, a new stack area must be created
-  // for the new child
-  // We suggest the use of a new constructor in AddrSpace class,
-  // This new constructor will copy the shared segments (space variable) from currentThread, passed
-  // as a parameter, and create a new stack for the new child
   threadsito->space = new AddrSpace( currentThread->space );
 
-  // We (kernel)-Fork to a new method to execute the child code
-  // Pass the user routine address, now in register 4, as a parameter
-  // Note: in 64 bits register 4 need to be casted to (void *)
   threadsito->Fork( Nachos_Fork_Thread, (void*)(long)machine->ReadRegister( 4 ) );
   currentThread->Yield();
   returnFromSystemCall();	// This adjust the PrevPC, PC, and NextPC registers
