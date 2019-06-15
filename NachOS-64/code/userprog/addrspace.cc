@@ -195,19 +195,19 @@ AddrSpace::InitRegisters()
 //----------------------------------------------------------------------
 
 void AddrSpace::SaveState(){
-	#ifdef VM //Si la memoria virtual esta definida
+#ifdef VM //Si la memoria virtual esta definida
     printf("Guardando el estado del hilo: %s\n", currentThread->getName());
-//Se recorre el pageTable para poner el uso y el dirty de las paginas igual a como este en el TLB
-    for(int i = 0; i < TLBSize; ++i)
+
+    for(int i = 0; i < TLBSize; ++i)				//poner el uso y el dirty de las paginas igual a como este en el translation lookaside buffer 
     {
-        pageTable[machine->tlb[i].virtualPage].use = machine->tlb[i].use; //pageTable[x].use=TLB[x].use
-        pageTable[machine->tlb[i].virtualPage].dirty = machine->tlb[i].dirty; //pageTable[x].dirty=TLB[x].dirty
+        pageTable[machine->tlb[i].virtualPage].use = machine->tlb[i].use; 
+        pageTable[machine->tlb[i].virtualPage].dirty = machine->tlb[i].dirty; 
     }
 
-    machine->tlb = new TranslationEntry[TLBSize]; //crea una nueva TLB
-    for (int i = 0; i < TLBSize; ++i)
+    machine->tlb = new TranslationEntry[TLBSize]; 	//nuevo translation lookaside buffer 
+    for (int j = 0; j < TLBSize; ++i)
     {
-        machine->tlb[i].valid = false; //pone las paginas en falso para poder hacer pageFaultException
+        machine->tlb[j].valid = false; 				//para poder hacer pageFaultException
     }
 #endif
 }
@@ -224,7 +224,7 @@ void AddrSpace::RestoreState()
 {
     // machine->pageTable = pageTable;
     // machine->pageTableSize = numPages;
-	#ifndef VM //esto debe cambiarse porque sino "tlb" y "pageTable" de "machine" serían ambas distintos de nulo y falla unos de los "ASSERT" de "translate"
+#ifndef VM //esto debe cambiarse porque sino "tlb" y "pageTable" de "machine" serían ambas distintos de nulo y falla unos de los "ASSERT" de "translate"
     machine->pageTable = pageTable;
     machine->pageTableSize = numPages;
 #else	//Se restaura el estado
