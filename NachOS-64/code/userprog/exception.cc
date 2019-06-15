@@ -324,7 +324,7 @@ void Nachos_Open()
         }
     
     
-    returnFromSystemCall();		// Update the PC registers
+    returnFromSystemCall();
 
 }       // Nachos_Open
 
