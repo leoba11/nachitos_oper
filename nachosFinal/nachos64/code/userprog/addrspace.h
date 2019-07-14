@@ -24,31 +24,26 @@ class AddrSpace {
   public:
     AddrSpace(AddrSpace* x);
     AddrSpace(OpenFile *executable);
-	// Create an address space,
-	// initializing it with the program
-	// stored in the file "executable"
+	
     ~AddrSpace();			// De-allocate an address space
 
-    void InitRegisters();		// Initialize user-level CPU registers,
-					// before jumping to user code
+    void InitRegisters();		// Initialize user-level CPU registers, before jumping to user code
 
-    void SaveState();			// Save/restore address space-specific
-    void RestoreState();		// info on a context switch
+    void SaveState();	
+    void RestoreState();
 
     // Métodos para pageFaultException
     TranslationEntry* getPageTable(); //Devuelve la pageTable del hilo
-    void getFromSwap(int vpn, int s); // Obtiene del swap
-    void saveToSwap(int vpn); // Guarda en el swap
+    void getFromSwap(int vpn, int s); // Obtiene pag desde el el swap
+    void saveToSwap(int vpn); // Guarda pag en el swap
     void setFileName(std::string name); // Setea el nombre del archivo
     std::string getFileName();  // Obtiene el nombre del archivo
     NoffHeader NoffH;
-    unsigned int numPages;		// Number of pages in the virtual
-					// address space
+    unsigned int numPages;		// Numero de pags en addresspace virtual
 
 
   private:
-    TranslationEntry *pageTable;	// Assume linear page table translation
-					// for now!
+    TranslationEntry *pageTable;
     // Atributos para pageFaultException
     OpenFile *swap;
     char *swapname;
