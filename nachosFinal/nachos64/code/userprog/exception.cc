@@ -24,25 +24,30 @@
 #include "copyright.h"
 #include "system.h"
 #include "syscall.h"
-#include "synch.h"	//Se incluye para usar la clase Semaphore
+#include "synch.h"	//Para usar la clase Semaphore
 #include "addrspace.h"
 
 
-#include <fcntl.h>  //Se incluye por problemas con O_RDWR
-#include <unistd.h>	//Se incluye para usar write pequeño
-#include <iostream>	//Se incluye para usar std::cin
+#include <fcntl.h>  
+#include <unistd.h>	
+#include <iostream>	//Para usar std::cin
 #include <map>
 
 #define FILE_SIZE 128
 
 using namespace std;
 
-struct execFiles 	//Estructura para guardar los archivos ejecutados
+struct execFiles
 {
-    long idHilo;	//Id del hilo
-    std::string nombreArchivo;
-    Semaphore* semaforo;
-    inline execFiles():idHilo(-1), nombreArchivo(), semaforo(NULL) {}
+    long id;
+    string name;
+    Semaphore* sema;
+
+    execFiles(){
+        id = -1;
+        name = "";
+        sema = NULL;
+    }
 };
 
 struct threadStruct
@@ -237,7 +242,7 @@ void Nachos_Join()
     if(execFilesMap->Test(id))
     {
         Semaphore* semaforo = new Semaphore("Join_sem", 0);
-        exFile[id]->semaforo = semaforo;
+        exFile[id]->sema = semaforo;
         semaforo->P();                                      //wait
         execFilesMap->Clear(id);
         machine->WriteRegister(2,0);                        
@@ -675,18 +680,16 @@ void Nachos_PageFaultException()
         //Si la página faltante es mayor a 0 y ademas es menor a la cantidad de páginas de código entonces es una página de código
         if(pagina >= 0 && pagina < x)
         {
-            DEBUG('a', "\t\tEs código\n");
             //Se obtiene una posición libre de MiMapa(BitMap)
             libre = MiMapa->Find();
             //Si no hay espacio en el bitmap se hace FIFO
             if(libre == -1)
             {
-                //Se guarda en y la posición del swap
+                //Se guarda en la posición del swap y se aumenta la posicion del swap
                 int y = posSWAP;
-                //Se aumenta la posicion del swap
                 posSWAP = (posSWAP+1)%NumPhysPages;
                 int p = -1;
-                //Recorre el TLB
+
                 for (int i = 0; i < TLBSize; ++i)
                 {
                     //Si la posición del tlb es válida y además la página física es igual a la página física de la posición del swap
