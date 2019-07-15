@@ -220,18 +220,18 @@ void AddrSpace::RestoreState()
     #endif
 }
 
-////////////////////////////////////////// Métodos para la implementación de pageFaultException//////////////////////////////////////////
+//------------------------------ Métodos para la implementación de pageFaultException ----------------------------------
 
-//Método que devuelve el pageTable de un hilo
+// Método que devuelve el pageTable de un hilo
 TranslationEntry* AddrSpace::getPageTable(){
     return pageTable;
 }
 
 // Método para cargar una página al swap, recibe el virtual page number
 void AddrSpace::saveToSwap(int vpn){
-    int espacio = SwapMap->Find(); //Se busca un espacio en el bitmap del swap
-    ASSERT( vpn >= 0 ); //Debe ser mayor o igual a 0
-    if (espacio == -1 ){ //Si no hay campo en el swap
+    int espacio = SwapMap->Find();  //Se busca un espacio en el bitmap del swap
+    ASSERT( vpn >= 0 );             //Debe ser mayor o igual a 0
+    if (espacio == -1 ){            //Si no hay campo en el swap
         ASSERT( false ); 
     }
     invertida[vpn]->valid = false; //Se pone el bit de validez en falso
@@ -239,7 +239,7 @@ void AddrSpace::saveToSwap(int vpn){
     swap->WriteAt((&machine->mainMemory[vpn*PageSize]),PageSize, espacio*PageSize); //Se escribe en el swap
     MiMapa->Clear(vpn);  //Se quita del bitmap la página que se envió
     stats->numDiskWrites++;   //Se actualiza
-    printf("Se cargar una página al swap \n");
+    printf("--> Cargar página al swap \n");
 }
 
 // Método para sacar una página del swap
@@ -249,7 +249,7 @@ void AddrSpace::getFromSwap(int vpn, int espacio){
     swap->ReadAt((&machine->mainMemory[vpn*PageSize]), PageSize, espacio * PageSize); //Se guarda en la memoria pricipal lo que hay en el swap
     stats->numPageFaults++; //Se actualizan estadisticas de pageFaults
     stats->numDiskReads++; //Se actualiza
-    printf("Se saca una página al swap\n");
+    printf("--> Sacar página al swap\n");
 }
 
 // Se le asigna el nombre del archivo

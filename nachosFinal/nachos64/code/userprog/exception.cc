@@ -645,6 +645,16 @@ void actualizarTLB(int entradaTLB, unsigned int paginaFaltante)
     }
 }
 
+// Método que actualiza pagina fisica, bit de validez, invertida y el TLB
+void actualiza(int libre, unsigned int pagina, TranslationEntry* pageTable, OpenFile* exe, NoffHeader noffH, int p)
+{
+    pageTable[pagina].physicalPage = libre;         //Se actualiza la página física con la nueva virtual
+    //Copiar en la memoria principal lo que hay en el archivo donde falta la página
+    exe->ReadAt(&(machine->mainMemory[(libre * PageSize)]),PageSize, noffH.code.inFileAddr + PageSize * pagina );
+    pageTable[pagina].valid = true;
+    invertida[libre] = &(pageTable[pagina]);
+    actualizarTLB(p, pagina);  
+}
 
 // captura la excepcion de pageFault, si no está en la tlb
 void Nachos_PageFaultException()
@@ -658,13 +668,10 @@ void Nachos_PageFaultException()
     if (!pageTable[pagina].valid && !pageTable[pagina].dirty)
     {
         printf("La pagina es invalida y limpia\n");
-        printf("Nombre del archivo: %s\n", currentThread->space->getFileName().c_str());
+        // printf("Nombre del archivo: %s\n", currentThread->space->getFileName().c_str());
 
-        //Se actualizan las estadisticas para llevar la cuenta de los pagefaults
-        stats->numPageFaults++;
-
-        //Se abre el archivo del cual hace falta la página
-        OpenFile* exe = fileSystem->Open(currentThread->space->getFileName().c_str());
+        stats->numPageFaults++;                                        //Se actualizan las estadisticas para llevar la cuenta de los pagefaults
+        OpenFile* exe = fileSystem->Open(currentThread->space->getFileName().c_str());      //Se abre el archivo del cual hace falta la página
 
         //Si el archivo no se puede abrir se cae el programa
         if (exe == NULL)
@@ -680,8 +687,9 @@ void Nachos_PageFaultException()
         //Si la página faltante es mayor a 0 y ademas es menor a la cantidad de páginas de código entonces es una página de código
         if(pagina >= 0 && pagina < x)
         {
-            //Se obtiene una posición libre de MiMapa(BitMap)
+            //Se obtiene una posición libre en BitMap
             libre = MiMapa->Find();
+
             //Si no hay espacio en el bitmap se hace FIFO
             if(libre == -1)
             {
@@ -692,130 +700,68 @@ void Nachos_PageFaultException()
 
                 for (int i = 0; i < TLBSize; ++i)
                 {
-                    //Si la posición del tlb es válida y además la página física es igual a la página física de la posición del swap
+                    //Posición del tlb válida y además la página física es igual a la página física de la posición del swap
                     if (machine->tlb[i].valid && machine->tlb[i].physicalPage == invertida[y]->physicalPage)
                     {
-                        //Se pone en inválido la página del tlb
+
                         machine->tlb[i].valid = false;
-                        //Se pone el uso del tlb igual al del pageTable
                         invertida[y]->use = machine->tlb[i].use;
-                        //Se pone el uso del tlb igual al del pageTable
                         invertida[y]->dirty = machine->tlb[i].dirty;
-                        //
                         p = i;
                         break;
                     }
                 }
-                //Si la posición del swap en invetida está sucia
+
                 if (invertida[y]->dirty)
-                {
-                    //Se guarda al Swap la página física
-                    currentThread->space->saveToSwap(invertida[y]->physicalPage);
-                    //Se busca un espacion en el bitmap
-                    libre = MiMapa->Find();
-                    //Si no hay campo se cae el programa
+                {  
+                    currentThread->space->saveToSwap(invertida[y]->physicalPage);   //Se guarda al Swap la página física  
+                    libre = MiMapa->Find();                                         //Se busca un espacion en el bitmap
+ 
                     if (libre == -1)
                     {
-                        printf("No es un Frame válido: %d\n", libre);
+                        printf("FRAME INVALIDO: %d\n", libre);
                         ASSERT( false );
-                    }
-                    //Se actualiza la página física con la nueva virtual
-                    pageTable[pagina].physicalPage = libre;
-                    //Se copia en la memoria principal(dirección de la página libre) lo que hay en el archivo del cual falta la página
-                    exe->ReadAt(&(machine->mainMemory[(libre * PageSize)]),PageSize, noffH.code.inFileAddr + PageSize * pagina );
-                    //Se pone el bit validez en true
-                    pageTable[pagina].valid = true;
-                    //Se pone en invertida la informacion del pageTable
-                    invertida[libre] = &(pageTable[pagina]);
-                    //Se actualiza la TLB
-                    actualizarTLB(p, pagina);
-                }
-                else
+                    }else
+                    {
+                        actualiza(libre, pagina, pageTable, exe, noffH, p);
+                    }    
+                }else
                 {
-                    //Si la página no está sucia(no se ha modificado)
                     //Se guarda la página física
                     int paginaVieja = invertida[y]->physicalPage;
-                    //Se invalida la página en la TLB
-                    invertida[y]->valid = false;
-                    //Se pone la página en -1(se invalida)
-                    invertida[y]->physicalPage = -1;
-                    //Se limpia la página vieja del Bitmap
-                    MiMapa->Clear( paginaVieja );
-                    //Se busca una página libre en el bitmap
+                    invertida[y]->valid = false;                  
+                    invertida[y]->physicalPage = -1;        //Se invalida
+                    MiMapa->Clear( paginaVieja ); 
                     libre = MiMapa->Find();
-                    //Si no hay espacio en el bitmap se cae el programa
+                    
                     if (libre == -1)
                     {
-                        DEBUG('a', "Invalid free frame %d\n", libre);
+                        printf("FRAME INVALIDO: %d\n", libre);
                         ASSERT(false);
-                    }
-                    //Se pone la página físcia en libre
-                    pageTable[pagina].physicalPage = libre;
-                    //Se copia en la memoria principal(dirección de la página libre) lo que hay en el archivo del cual falta la página
-                    exe->ReadAt(&(machine->mainMemory[ (libre * PageSize)]), PageSize, noffH.code.inFileAddr + PageSize * pagina);
-                    //Se pone el bit validez en true
-                    pageTable[pagina].valid = true;
-                    //Se pone en invertida la informacion del pageTable
-                    invertida[libre] = &(pageTable[pagina]);
-                    //Se actualiza la TLB
-                    actualizarTLB(p, pagina);
+                    }else
+                    {
+                        actualiza(libre, pagina, pageTable, exe, noffH, p);
+                    }    
                 }
-            }
-            else
-            {
-                //Si está libre
+            }else        //Si está libre
+            {  
                 DEBUG('v',"Frame libre es: %d\n", libre);
-                //Se pone la página físcia en libre
-                pageTable[pagina].physicalPage = libre;
-                //Se copia en la memoria principal(dirección de la página libre) lo que hay en el archivo del cual falta la página
-                exe->ReadAt(&(machine->mainMemory[(libre * PageSize)]),PageSize, noffH.code.inFileAddr + PageSize * pagina);
-                //Se pone el bit validez en true
-                pageTable[pagina].valid = true;
-                //Se actualiza la TLB invertida
-                invertida[libre] = &(pageTable[pagina]);
-                //Se actualiza la TLB
-                machine->tlb[posTLB].virtualPage =  pageTable[pagina].virtualPage;
-                machine->tlb[posTLB].physicalPage = pageTable[pagina].physicalPage;
-                machine->tlb[posTLB].valid = pageTable[pagina].valid;
-                machine->tlb[posTLB].use = pageTable[pagina].use;
-                machine->tlb[posTLB].dirty = pageTable[pagina].dirty;
-                machine->tlb[posTLB].readOnly = pageTable[pagina].readOnly;
-                posTLB = (posTLB + 1)%TLBSize;
+                int p = -1;
+                actualiza(libre, pagina, pageTable, exe, noffH, p);
             }
-        }
-        // Sino es una página de datos
-        else if(pagina >= x && pagina < z)
+        }else if(pagina >= x && pagina < z)                 // Sino es una página de datos
         {
-            //Si la página faltante es mayor a la cantidad de páginas de código y ademas es menor a la cantida de páginas de danos Inicializados entonces es una página de datos inicializados
-            //Se trae la pagina del ejecutable
-            DEBUG('a', "\t\tDatos Inicializados\n");
-            //Se busca un espacio en el bitmap
+            //Si la página faltante es mayor a la cantidad de páginas de código y es menor a la cantidad de datos Inicializados entonces es una página de datos inicializados
             libre = MiMapa->Find();
+            int p = -1;
             //Si hay espacio
             if (libre != -1 )
             {
                 DEBUG('a',"Frame libre es: %d\n",libre);
-                //Se iguala la página física con la libre
-                pageTable[pagina].physicalPage = libre;
-                //Se copia en la memoria principal(dirección de la página libre) lo que hay en el archivo del cual falta la página
-                exe->ReadAt(&(machine->mainMemory[(libre * PageSize)]),PageSize, noffH.code.inFileAddr + PageSize * pagina);
-                //Se pone el bit validez en true
-                pageTable[pagina].valid = true;
-                //Se actualiza la TLB invertida
-                invertida[libre] = &(pageTable[pagina]);
-                //Se actualiza la TLB
-                machine->tlb[posTLB].virtualPage =  pageTable[pagina].virtualPage;
-                machine->tlb[posTLB].physicalPage = pageTable[pagina].physicalPage;
-                machine->tlb[posTLB].valid = pageTable[pagina].valid;
-                machine->tlb[posTLB].use = pageTable[pagina].use;
-                machine->tlb[posTLB].dirty = pageTable[pagina].dirty;
-                machine->tlb[posTLB].readOnly = pageTable[pagina].readOnly;
-                posTLB = (posTLB + 1)%TLBSize;
-            }
-            else
+                actualiza(libre, pagina, pageTable, exe, noffH, p);
+            }else
             {
-                //Si no hay espacio
-                //Se realiza lo mismo que cuando no habia espacio y era una página de código
+                //Si no hay espacio se hace lo mismo que cuando no habia espacio y era una página de código
                 int y = posSWAP;
                 posSWAP = (posSWAP+1)%NumPhysPages;
                 int p = -1;
@@ -835,54 +781,29 @@ void Nachos_PageFaultException()
                 {
                     //Se envía al swap
                     currentThread->space->saveToSwap(invertida[y]->physicalPage);
-                    //Se busca un frame libre
                     libre = MiMapa->Find();
-                    //Si no hay campo en el bitmap el programa se "cae"
+                    //Si no hay campo en el bitmap el programa se cae
                     if (libre == -1)
                     {
-                        printf("Invalid free frame %d\n", libre);
+                        printf("FRAME INVALIDO: %d\n", libre);
                         ASSERT( false );
                     }
-                    //Sino se se iguala la página física al espacio encontrado en el bitmap
-                    pageTable[pagina].physicalPage = libre;
-                    //Se copia en la memoria principal(dirección de la página libre) lo que hay en el archivo del cual falta la página
-                    exe->ReadAt(&(machine->mainMemory[(libre * PageSize)]),PageSize, noffH.code.inFileAddr + PageSize * pagina);
-                    //Se valida la página
-                    pageTable[pagina].valid = true;
-                    //Se actualiza la tabla de paginas invertidas
-                    invertida[libre] = &(pageTable[pagina]);
-                    //Se actualiza TLB
-                    actualizarTLB(p, pagina);
-                }
-                else
-                {
-                    //Si no se ha mmodificado
-                    //Se guarda la página física
-                    int paginaVieja = invertida[y]->physicalPage;
-                    //Se limpia la página vieja del Bitmap
-                    MiMapa->Clear( paginaVieja );
-                    //Se invalida la página en la TLB
-                    invertida[y]->valid = false;
-                    //Se pone la página en -1(se invalida)
-                    invertida[y]->physicalPage = -1;
-                    //Se busca una página libre en el bitmap
-                    libre = MiMapa->Find();
+                    actualiza(libre, pagina, pageTable, exe, noffH, p);
+                }else
+                {   
+                    int paginaVieja = invertida[y]->physicalPage;   //Si no se ha modificado, se guarda la página física 
+                    MiMapa->Clear( paginaVieja );                   //Se limpia la página vieja del Bitmap     
+                    invertida[y]->valid = false;                    //Se invalida la página en la TLB      
+                    invertida[y]->physicalPage = -1;                //Se pone la página en invalida)                   
+                    libre = MiMapa->Find();                         //Se busca una página libre en el bitmap                   
+
                     //Si no hay espacio en el bitmap se cae el programa
                     if (libre == -1)
                     {
-                        DEBUG('a', "Invalid free frame %d\n", libre);
+                        printf("FRAME INVALIDO: %d\n", libre);
                         ASSERT(false);
                     }
-                    //Se pone la página físcia en libre
-                    pageTable[pagina].physicalPage = libre;
-                    //Se copia en la memoria principal(dirección de la página libre) lo que hay en el archivo del cual falta la página
-                    exe->ReadAt(&(machine->mainMemory[(libre * PageSize)]),PageSize, noffH.code.inFileAddr + PageSize * pagina);
-                    //Se pone el bit validez en true
-                    pageTable[pagina].valid = true;
-                    //Se pone en invertida la informacion del pageTable
-                    invertida[libre] = &(pageTable[pagina]);
-                    //Se actualiza TLB
-                    actualizarTLB(p, pagina);
+                    actualiza(libre, pagina, pageTable, exe, noffH, p);
                 }
             }
         }
@@ -892,24 +813,12 @@ void Nachos_PageFaultException()
             DEBUG('v',"\tDatos no Inicializados o Pila\n");
             //Se busca un espacio en el bitmap
             libre = MiMapa->Find();
+            int p = -1;
             DEBUG('v',"\t\t\tBuscar una página nueva\n");
             //Si hay espacio
             if (libre != -1)
             {
-                //Se iguala la página física con la libre
-                pageTable[pagina].physicalPage = libre;
-                //Se pone el bit validez en true
-                pageTable[pagina].valid = true;
-                //Se actualiza la TLB invertida
-                invertida[libre] = &(pageTable[pagina]);
-                //Se actualiza la TLB
-                machine->tlb[posTLB].virtualPage =  pageTable[pagina].virtualPage;
-                machine->tlb[posTLB].physicalPage = pageTable[pagina].physicalPage;
-                machine->tlb[posTLB].valid = pageTable[pagina].valid;
-                machine->tlb[posTLB].use = pageTable[pagina].use;
-                machine->tlb[posTLB].dirty = pageTable[pagina].dirty;
-                machine->tlb[posTLB].readOnly = pageTable[pagina].readOnly;
-                posTLB = (posTLB + 1)%TLBSize;
+                actualiza(libre, pagina, pageTable, exe, noffH, p);
             }
             else
             {
@@ -931,100 +840,60 @@ void Nachos_PageFaultException()
                 }
                 if ( invertida[y]->dirty )
                 {
-                    //Se envía al swap
                     currentThread->space->saveToSwap(invertida[y]->physicalPage);
-                    //Se busca un frame libre
                     libre = MiMapa->Find();
-                    //Si no hay campo en el bitmap el programa se "cae"
+
                     if ( -1 == libre)
                     {
-                        printf("Invalid free frame %d\n", libre );
+                        printf("FRAME INVALIDO: %d\n", libre);
                         ASSERT( false );
                     }
-                    //Sino se se iguala la página física al espacio encontrado en el bitmap
-                    pageTable [pagina].physicalPage = libre;
-                    //Se valida la página
-                    pageTable [pagina].valid = true;
-
-                    //Se actualiza la tabla de paginas invertidas
-                    invertida[libre] = &(pageTable [pagina]);
-                    //Se actualiza TLB
-                    actualizarTLB(p, pagina);
+                    actualiza(libre, pagina, pageTable, exe, noffH, p);
                 }
                 else
-                {
-                    //Si no se ha modificado
-                    //Se guarda la página física
-                    int paginaVieja = invertida[y]->physicalPage;
-                    //Se invalida la página en la TLB
-                    invertida[y]->valid = false;
-                    //Se pone la página en -1(se invalida)
-                    invertida[y]->physicalPage = -1;
-                    //Se limpia la página vieja del Bitmap
-                    MiMapa->Clear(paginaVieja);
-                    //Se busca una página libre en el bitmap
+                {   
+                    int paginaVieja = invertida[y]->physicalPage;       //Si no se ha modificado se guarda la página física
+                    invertida[y]->valid = false;                        //Se invalida la página en la TLB
+                    invertida[y]->physicalPage = -1;                    //Se pone la página invalida
+                    MiMapa->Clear(paginaVieja);                         //Se limpia la página vieja del Bitmap
                     libre = MiMapa->Find();
-                    //Si no hay espacio en el bitmap se cae el programa
+
                     if (libre == -1 )
                     {
-                        DEBUG('v',"Invalid free frame %d\n", libre);
                         ASSERT( false );
                     }
-                    //Se pone la página físcia en libre
-                    pageTable[pagina].physicalPage = libre;
-                    //Se pone el bit validez en true
-                    pageTable[pagina].valid = true;
-                    //Se pone en invertida la informacion del pageTable
-                    invertida[libre] = &(pageTable[pagina]);
-                    //Se actualiza TLB
-                    actualizarTLB(p, pagina);
+                    actualiza(libre, pagina, pageTable, exe, noffH, p);
                 }
             }
         }
         else
         {
-            printf("%s %d\n", "Numero de pagina no es valido", pagina);
+            printf("%s %d\n", "Numero de página inválido", pagina);
             ASSERT(false);
-        }
-        //Se elimina la instancia del archivo
-        delete exe;
+        }  
+        delete exe;                                                     //Eliminar instancia del archivo
     }else if(!pageTable[pagina].valid && pageTable[pagina].dirty)       //Si la pagina no es valida y esta sucia
     {
         //Debo traer la pagina del area de SWAP
         DEBUG('v', "\tPagina invalida y sucia\n");
         DEBUG('v', "\t\tPagina física: %d, pagina virtual= %d\n", pageTable[pagina].physicalPage, pageTable[pagina].virtualPage );
-        //Se busca un frame libre
         libre = MiMapa->Find();
+        
         //Si hay campo en el bitmap
         if(libre != -1)
-        {
-            DEBUG('v',"%s\n", "Hay espacio en memoria, por lo que traemos de SWAP\n" );
-
-            //Se guarda la página física
-            int pagVieja = pageTable [pagina].physicalPage;
-            //Se pone la página físcia en libre
-            pageTable [pagina].physicalPage = libre;
-            //Se carga de swap
-            currentThread->space->getFromSwap(libre, pagVieja);
-            //Se pone el bit validez en true
+        { 
+            int pagVieja = pageTable [pagina].physicalPage;         //Se guarda la página física           
+            pageTable [pagina].physicalPage = libre;                //Se pone la página físcia en libre
+            currentThread->space->getFromSwap(libre, pagVieja);     //Se carga de swap
             pageTable [pagina].valid = true;
-            //Se pone en invertida la informacion del pageTable
             invertida[libre] = &(pageTable[pagina]);
-            //Se actualiza TLB
-            machine->tlb[posTLB].physicalPage = pageTable[pagina].physicalPage;
-            machine->tlb[posTLB].virtualPage =  pageTable[pagina].virtualPage;
-            machine->tlb[posTLB].dirty = pageTable[pagina].dirty;
-            machine->tlb[posTLB].valid = pageTable[pagina].valid;
-            machine->tlb[posTLB].use = pageTable[pagina].use;
-            machine->tlb[posTLB].readOnly = pageTable[pagina].readOnly;
-            posTLB = (posTLB + 1)%TLBSize;
+            actualizarTLB(posTLB, pagina);
         }
         else
         {
-            DEBUG('v',"\n%s\n", "No hay memoria\n" );
             //swap
             int y = posSWAP;
-            posSWAP = (posSWAP+1)%NumPhysPages;
+            posSWAP = (posSWAP+1) % NumPhysPages;
 
             int p = -1;
             for (int i = 0; i < TLBSize; ++i)
@@ -1042,26 +911,19 @@ void Nachos_PageFaultException()
             {
                 //Se envía al swap
                 currentThread->space->saveToSwap(invertida[y]->physicalPage);
-                //Se busca un frame libre
-                libre = MiMapa->Find();
-                //Si no hay campo en el bitmap el programa se "cae"
+                libre = MiMapa->Find();                //Se busca un frame libre
+
                 if ( libre == -1 )
                 {
-                    printf("Invalid free frame %d\n", libre);
+                    printf("FRAME INVALIDO %d\n", libre);
                     ASSERT(false);
                 }
 
                 int pagVieja = pageTable [pagina].physicalPage;
-                //Sino se se iguala la página física al espacio encontrado en el bitmap
-                pageTable[pagina].physicalPage = libre;
-
-                //Se carga la pagina que desde el SWAP
-                currentThread->space->getFromSwap(libre, pagVieja);
-                //Se valida la página
+                pageTable[pagina].physicalPage = libre;  
+                currentThread->space->getFromSwap(libre, pagVieja);     //Se carga la pagina que DESDE el SWAP
                 pageTable[pagina].valid = true;
-                //Se actualiza la tabla de paginas invertidas
                 invertida[libre] = &(pageTable[pagina]);
-                //Se actualiza TLB
                 actualizarTLB(p, pagina);
             }
             else
@@ -1079,23 +941,17 @@ void Nachos_PageFaultException()
                     ASSERT( false );
                 }
                 int pagVieja = pageTable[pagina].physicalPage;
-                //Se pone la página físcia en libre
                 pageTable[pagina].physicalPage = libre;
-                //Se carga de swap
-                currentThread->space->getFromSwap(libre, pagVieja);
-                //Se pone el bit validez en true
+                currentThread->space->getFromSwap(libre, pagVieja);     //Se carga DE swap
                 pageTable[pagina].valid = true;
-                //Se pone en invertida la informacion del pageTable
                 invertida[libre] = &(pageTable[pagina]);
-                //Actualizar TLB
                 actualizarTLB(p, pagina);
             }
         }
-        //valida y no sucia
     }
+    // La pagina es valida y no está sucia
     else if(pageTable[pagina].valid && !pageTable[pagina].dirty)
     {
-        DEBUG('a', "\tLa pagina es valida y está limpia\n");
         //Hay que actualizar el TLB, página por ser válida ya está en memoria
         machine->tlb[posTLB].virtualPage =  pageTable[pagina].virtualPage;
         machine->tlb[posTLB].physicalPage = pageTable[pagina].physicalPage;
@@ -1104,44 +960,23 @@ void Nachos_PageFaultException()
         machine->tlb[posTLB].dirty = pageTable[pagina].dirty;
         machine->tlb[posTLB].readOnly = pageTable[pagina].readOnly;
         posTLB = (posTLB + 1) % TLBSize;
-    }
-    //valida y sucia
-    else
+    }else            //La pagina es valida y esta sucia
     {
-        DEBUG('a', "\tLa pagina es valida y está sucia\n");
-        //Hay que actualizar el TLB, página por ser válida ya está en memoria
         machine->tlb[posTLB].virtualPage =  pageTable[pagina].virtualPage;
         machine->tlb[posTLB].physicalPage = pageTable[pagina].physicalPage;
         machine->tlb[posTLB].valid = pageTable[pagina].valid;
         machine->tlb[posTLB].use = pageTable[pagina].use;
         machine->tlb[posTLB].dirty = pageTable[pagina].dirty;
         machine->tlb[posTLB].readOnly = pageTable[pagina].readOnly;
-        posTLB = (posTLB + 1)%TLBSize;
+        posTLB = (posTLB + 1) % TLBSize;
     }
 }
 
-//----------------------------------------------------------------------
-// ExceptionHandler
-// 	Entry point into the Nachos kernel.  Called when a user program
-//	is executing, and either does a syscall, or generates an addressing
-//	or arithmetic exception.
-//
-// 	For system calls, the following is the calling convention:
-//
-// 	system call code -- r2
-//		arg1 -- r4
-//		arg2 -- r5
-//		arg3 -- r6
-//		arg4 -- r7
-//
-//	The result of the system call, if any, must be put back into r2.
-//
-// And don't forget to increment the pc before returning. (Or else you'll
-// loop making the same system call forever!
-//
-//	"which" is the kind of exception.  The list of possible exceptions
-//	are in machine.h.
-//----------------------------------------------------------------------
+
+
+/*----------------------------------TERMINAN SYSCALLS, EMPIEZA SWITCH-----------------------------------------*/
+
+
 void ExceptionHandler(ExceptionType which)
 {
     int type = machine->ReadRegister(2);
